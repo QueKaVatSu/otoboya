@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Yönetim Paneli - Veri İçe Aktarma</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -86,18 +86,7 @@
                     request.onerror = event => reject(event.target.error);
                 });
             }
-
-            async function clearStore() {
-                const db = await openDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(storeName, 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.clear();
-                    request.onsuccess = () => resolve();
-                    request.onerror = event => reject(event.target.error);
-                });
-            }
-
+            
             fileUpload.addEventListener('change', () => {
                 if (fileUpload.files.length > 0) {
                     fileNameSpan.textContent = fileUpload.files[0].name;
@@ -151,8 +140,8 @@
             });
 
             async function processDataInChunks(data) {
-                statusMessage.textContent = 'Eski veriler temizleniyor...';
-                await clearStore();
+                // statusMessage.textContent = 'Eski veriler temizleniyor...';
+                // await clearStore(); // Bu satır kaldırıldı. Veriler artık temizlenmeyecek.
                 
                 const db = await openDB();
                 const totalRows = data.length;
@@ -194,7 +183,7 @@
                         } else {
                             statusMessage.innerHTML = `
                                 <strong class="text-green-600">Başarılı!</strong><br>
-                                ${importedCount} adet renk kaydı başarıyla içe aktarıldı.
+                                ${importedCount} adet yeni renk kaydı başarıyla eklendi.
                                 <a href="index.html" class="font-bold underline">Şimdi arama ekranına gidebilirsiniz.</a>
                             `;
                              statusMessage.className = 'mt-6 text-center text-sm text-green-600';
