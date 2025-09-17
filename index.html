@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>COLOR.N.DRIVE - Aracının Rengini Keşfet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto px-4 py-8 min-h-screen flex flex-col">
+        <header class="mb-12">
+            <h1 class="text-2xl font-bold tracking-wider">COLOR.N.DRIVE</h1>
+        </header>
+
+        <main class="flex-grow">
+            <div class="max-w-3xl mx-auto">
+                <h2 class="text-5xl font-bold mb-4">Aracının Rengini Keşfet</h2>
+                <p class="text-gray-500 mb-8">Marka - Model - Yıl seç, <span class="font-semibold text-gray-700">Rengi Bul</span> ile aşağıda tüm renkleri gör.</p>
+
+                <div class="bg-white p-6 shadow-lg rounded-xl">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div class="md:col-span-1">
+                            <label for="brand-select" class="block text-sm font-medium text-gray-600 mb-1">Marka Seçin</label>
+                            <select id="brand-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition">
+                                <option>Önce Marka</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-1">
+                            <label for="model-select" class="block text-sm font-medium text-gray-600 mb-1">Model Seçin</label>
+                            <select id="model-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition" disabled>
+                                <option>Önce Model</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-1">
+                            <label for="year-select" class="block text-sm font-medium text-gray-600 mb-1">Yıl Seçin</label>
+                            <select id="year-select" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition" disabled>
+                                <option>Önce Yıl</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-1">
+                            <button id="find-color-btn" class="w-full bg-pink-500 text-white font-bold p-3 rounded-lg hover:bg-pink-600 transition-all shadow-md hover:shadow-lg">
+                                Rengi Bul
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="results-container" class="mt-10">
+                    <!-- Renk sonuçları burada gösterilecek -->
+                </div>
+                 <div id="no-data-message" class="mt-10 text-center p-6 bg-yellow-100 text-yellow-800 rounded-lg hidden">
+                    <p>Görüntülenecek veri bulunamadı. Lütfen önce yönetim panelinden Excel dosyasını içe aktarın.</p>
+                    <a href="admin.html" class="font-bold underline hover:text-yellow-900">Yönetim Paneline Git</a>
+                </div>
+            </div>
+        </main>
+
+        <footer class="text-center text-gray-400 mt-12 py-4">
+            <p>&copy; 2025 - <a href="admin.html" class="underline hover:text-gray-600">Yönetim Paneli</a></p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const brandSelect = document.getElementById('brand-select');
+            const modelSelect = document.getElementById('model-select');
+            const yearSelect = document.getElementById('year-select');
+            const findColorBtn = document.getElementById('find-color-btn');
+            const resultsContainer = document.getElementById('results-container');
+            const noDataMessage = document.getElementById('no-data-message');
+
+            // Tarayıcı hafızasından veriyi al
+            const carData = JSON.parse(localStorage.getItem('carPaintData')) || [];
+
+            if (carData.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                document.querySelector('.bg-white').classList.add('hidden');
+            }
+
+            // Markaları doldur
+            const brands = [...new Set(carData.map(item => item.brand))].sort();
+            brandSelect.innerHTML = '<option value="">Marka Seçin</option>';
+            brands.forEach(brand => {
+                if(brand) {
+                    const option = document.createElement('option');
+                    option.value = brand;
+                    option.textContent = brand;
+                    brandSelect.appendChild(option);
+                }
+            });
+
+            // Marka seçildiğinde modelleri doldur
+            brandSelect.addEventListener('change', () => {
+                const selectedBrand = brandSelect.value;
+                modelSelect.innerHTML = '<option value="">Model Seçin</option>';
+                yearSelect.innerHTML = '<option value="">Yıl Seçin</option>';
+                yearSelect.disabled = true;
+                resultsContainer.innerHTML = '';
+
+                if (selectedBrand) {
+                    const models = [...new Set(carData.filter(item => item.brand === selectedBrand).map(item => item.model))].sort();
+                    models.forEach(model => {
+                        if(model) {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            modelSelect.appendChild(option);
+                        }
+                    });
+                    modelSelect.disabled = false;
+                } else {
+                    modelSelect.disabled = true;
+                }
+            });
+
+            // Model seçildiğinde yılları doldur
+            modelSelect.addEventListener('change', () => {
+                const selectedBrand = brandSelect.value;
+                const selectedModel = modelSelect.value;
+                yearSelect.innerHTML = '<option value="">Yıl Seçin</option>';
+                resultsContainer.innerHTML = '';
+                
+                if (selectedModel) {
+                    const years = [...new Set(carData.filter(item => item.brand === selectedBrand && item.model === selectedModel).map(item => item.year))].sort((a,b) => b-a);
+                    years.forEach(year => {
+                         if(year) {
+                            const option = document.createElement('option');
+                            option.value = year;
+                            option.textContent = year;
+                            yearSelect.appendChild(option);
+                        }
+                    });
+                    yearSelect.disabled = false;
+                } else {
+                    yearSelect.disabled = true;
+                }
+            });
+            
+            yearSelect.addEventListener('change', () => {
+                resultsContainer.innerHTML = '';
+            });
+
+            // "Rengi Bul" butonuna tıklandığında
+            findColorBtn.addEventListener('click', () => {
+                const selectedBrand = brandSelect.value;
+                const selectedModel = modelSelect.value;
+                const selectedYear = yearSelect.value;
+                
+                resultsContainer.innerHTML = '';
+
+                if (!selectedBrand || !selectedModel || !selectedYear) {
+                    alert('Lütfen tüm alanları seçin.');
+                    return;
+                }
+
+                const colors = carData.filter(item => 
+                    item.brand === selectedBrand && 
+                    item.model === selectedModel && 
+                    item.year.toString() === selectedYear
+                );
+                
+                displayResults(colors);
+            });
+            
+            function displayResults(colors) {
+                if (colors.length === 0) {
+                    resultsContainer.innerHTML = `<div class="text-center p-6 bg-white rounded-lg shadow"><p class="text-gray-600">Bu kritere uygun renk bulunamadı.</p></div>`;
+                    return;
+                }
+
+                const resultsHTML = `
+                    <h3 class="text-2xl font-bold mb-4">Bulunan Renkler (${colors.length})</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        ${colors.map(color => `
+                            <div class="bg-white p-4 rounded-lg shadow text-center">
+                                <div class="w-16 h-16 mx-auto rounded-full bg-gray-200 mb-3 border-4 border-gray-300"></div>
+                                <p class="font-bold text-gray-800">${color.colorCode || 'N/A'}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                resultsContainer.innerHTML = resultsHTML;
+            }
+        });
+    </script>
+</body>
+</html>
