@@ -70,7 +70,7 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const brandSelect = document.getElementById('brand-select');
             const modelSelect = document.getElementById('model-select');
             const yearSelect = document.getElementById('year-select');
@@ -78,12 +78,44 @@
             const resultsContainer = document.getElementById('results-container');
             const noDataMessage = document.getElementById('no-data-message');
 
-            // Tarayıcı hafızasından veriyi al
-            const carData = JSON.parse(localStorage.getItem('carPaintData')) || [];
+            // IndexedDB Veritabanı Ayarları
+            const dbName = 'CarPaintDB';
+            const storeName = 'colors';
+            const dbVersion = 1;
 
-            if (carData.length === 0) {
+            function openDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(dbName, dbVersion);
+                    // onupgradeneeded burada da olmalı ki veritabanı hiç oluşturulmadıysa hata vermesin
+                    request.onupgradeneeded = event => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(storeName)) {
+                            db.createObjectStore(storeName, { autoIncrement: true });
+                        }
+                    };
+                    request.onsuccess = event => resolve(event.target.result);
+                    request.onerror = event => reject(event.target.error);
+                });
+            }
+
+            async function getAllData() {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction(storeName, 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.getAll();
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = (event) => reject(event.target.error);
+                });
+            }
+            
+            // Veriyi IndexedDB'den al
+            const carData = await getAllData();
+
+            if (!carData || carData.length === 0) {
                 noDataMessage.classList.remove('hidden');
                 document.querySelector('.bg-white').classList.add('hidden');
+                return; // Veri yoksa devam etme
             }
 
             // Markaları doldur
@@ -194,3 +226,4 @@
     </script>
 </body>
 </html>
+
