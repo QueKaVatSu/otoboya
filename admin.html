@@ -49,7 +49,7 @@
                 <span id="file-name" class="ml-3 text-gray-600">Dosya seçilmedi</span>
              </div>
 
-            <button id="import-btn" class="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500">
+            <button id="import-btn" class="w-full bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 disabled:opacity-50" disabled>
                 Yükle & İçe Aktar
             </button>
         </div>
@@ -68,13 +68,44 @@
             const importBtn = document.getElementById('import-btn');
             const statusMessage = document.getElementById('status-message');
             const fileNameSpan = document.getElementById('file-name');
-            const fileLabel = document.getElementById('file-label');
+
+            // IndexedDB Veritabanı Ayarları
+            const dbName = 'CarPaintDB';
+            const storeName = 'colors';
+            const dbVersion = 1;
+
+            function openDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(dbName, dbVersion);
+                    request.onupgradeneeded = event => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(storeName)) {
+                            db.createObjectStore(storeName, { autoIncrement: true });
+                        }
+                    };
+                    request.onsuccess = event => resolve(event.target.result);
+                    request.onerror = event => reject(event.target.error);
+                });
+            }
+
+            async function clearStore() {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction(storeName, 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.clear();
+                    request.onsuccess = () => resolve();
+                    request.onerror = event => reject(event.target.error);
+                });
+            }
 
             fileUpload.addEventListener('change', () => {
                 if (fileUpload.files.length > 0) {
                     fileNameSpan.textContent = fileUpload.files[0].name;
+                    importBtn.disabled = false;
                 } else {
                     fileNameSpan.textContent = 'Dosya seçilmedi';
+                    importBtn.disabled = true;
                 }
             });
 
@@ -84,11 +115,12 @@
                     statusMessage.className = 'mt-6 text-center text-sm text-red-600';
                     return;
                 }
-
+                
+                importBtn.disabled = true;
                 const file = fileUpload.files[0];
                 const reader = new FileReader();
 
-                statusMessage.textContent = 'Dosya okunuyor ve işleniyor, lütfen bekleyin...';
+                statusMessage.textContent = 'Dosya okunuyor, lütfen bekleyin...';
                 statusMessage.className = 'mt-6 text-center text-sm text-blue-600';
 
                 reader.onload = (event) => {
@@ -97,43 +129,15 @@
                         const workbook = XLSX.read(data, { type: 'array' });
                         const firstSheetName = workbook.SheetNames[0];
                         const worksheet = workbook.Sheets[firstSheetName];
-                        
-                        // Veriyi satır satır array olarak al, başlığı atla
                         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, range: 1 });
 
-                        const extractedData = jsonData.map(row => {
-                            // Sütunlar: I=8, J=9, L=11, AJ=35
-                            const brand = row[8];
-                            const model = row[9];
-                            const year = row[11];
-                            const colorCode = row[35];
-
-                            if (brand && model && year && colorCode) {
-                                return {
-                                    brand: String(brand).trim(),
-                                    model: String(model).trim(),
-                                    year: parseInt(year),
-                                    colorCode: String(colorCode).trim()
-                                };
-                            }
-                            return null;
-                        }).filter(item => item !== null); // Boş satırları filtrele
-
-                        // Veriyi tarayıcının hafızasına kaydet
-                        localStorage.setItem('carPaintData', JSON.stringify(extractedData));
-                        
-                        statusMessage.innerHTML = `
-                            <strong class="text-green-600">Başarılı!</strong><br>
-                            ${extractedData.length} adet renk kaydı başarıyla içe aktarıldı.
-                            <a href="index.html" class="font-bold underline">Şimdi arama ekranına gidebilirsiniz.</a>
-                        `;
-                         statusMessage.className = 'mt-6 text-center text-sm text-green-600';
-
+                        processDataInChunks(jsonData);
 
                     } catch (error) {
                         console.error("Dosya işleme hatası:", error);
                         statusMessage.textContent = 'Hata: Dosya işlenirken bir sorun oluştu. Lütfen dosya formatını kontrol edin.';
                         statusMessage.className = 'mt-6 text-center text-sm text-red-600';
+                        importBtn.disabled = false;
                     }
                 };
                 
@@ -141,11 +145,78 @@
                      console.error("Dosya okuma hatası:", error);
                      statusMessage.textContent = 'Hata: Dosya okunurken bir sorun oluştu.';
                      statusMessage.className = 'mt-6 text-center text-sm text-red-600';
+                     importBtn.disabled = false;
                 };
 
                 reader.readAsArrayBuffer(file);
             });
+
+            async function processDataInChunks(data) {
+                statusMessage.textContent = 'Eski veriler temizleniyor...';
+                await clearStore();
+                
+                const db = await openDB();
+                const totalRows = data.length;
+                let processedCount = 0;
+                let importedCount = 0;
+                const chunkSize = 1000; // Her seferinde 1000 satır işle
+
+                function processChunk(startIndex) {
+                    const transaction = db.transaction(storeName, 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const endIndex = Math.min(startIndex + chunkSize, totalRows);
+
+                    for (let i = startIndex; i < endIndex; i++) {
+                        const row = data[i];
+                        // Sütunlar: I=8, J=9, L=11, AJ=35 (0-indexed)
+                        const brand = row[8];
+                        const model = row[9];
+                        const year = row[11];
+                        const colorCode = row[35];
+
+                        if (brand && model && year && colorCode) {
+                            const record = {
+                                brand: String(brand).trim(),
+                                model: String(model).trim(),
+                                year: parseInt(year),
+                                colorCode: String(colorCode).trim()
+                            };
+                            store.add(record);
+                            importedCount++;
+                        }
+                    }
+                    
+                    processedCount = endIndex;
+                    statusMessage.textContent = `${processedCount} / ${totalRows} satır işlendi...`;
+
+                    transaction.oncomplete = () => {
+                        if (processedCount < totalRows) {
+                            setTimeout(() => processChunk(processedCount), 0); // UI'ın donmaması için
+                        } else {
+                            statusMessage.innerHTML = `
+                                <strong class="text-green-600">Başarılı!</strong><br>
+                                ${importedCount} adet renk kaydı başarıyla içe aktarıldı.
+                                <a href="index.html" class="font-bold underline">Şimdi arama ekranına gidebilirsiniz.</a>
+                            `;
+                             statusMessage.className = 'mt-6 text-center text-sm text-green-600';
+                             importBtn.disabled = false;
+                             fileUpload.value = ''; // Dosya seçimini temizle
+                             fileNameSpan.textContent = 'Dosya seçilmedi';
+                        }
+                    };
+                    
+                    transaction.onerror = (event) => {
+                        console.error("DB transaction error:", event.target.error);
+                        statusMessage.textContent = 'Hata: Veritabanına yazılırken bir sorun oluştu.';
+                        statusMessage.className = 'mt-6 text-center text-sm text-red-600';
+                        importBtn.disabled = false;
+                    };
+                }
+                
+                processChunk(0); // İşlemi başlat
+            }
         });
     </script>
 </body>
 </html>
+
